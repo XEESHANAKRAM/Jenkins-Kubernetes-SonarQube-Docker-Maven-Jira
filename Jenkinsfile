@@ -1,36 +1,69 @@
 pipeline {
     agent any
+
+    tools {
+        maven 'maven3'
+        jdk 'jdk17'
+    }
+
+    environment {
+        SONAR_HOME = tool 'sonar-scanner'
+        KUBECONFIG = '/root/.kube/config'  // Ensure this points to your kubeconfig file
+    }
+
     stages {
-        stage('Checkout') {
+        stage('Git Checkout') {
             steps {
-                checkout scm
+                git branch: 'main', url: 'https://github.com/XEESHANAKRAM/Jenkins-Kubernetes-SonarQube-Docker-Maven-Jira.git'
             }
         }
-        stage('Code Analysis with SonarQube') {
+        
+        stage('Code Compile') {
             steps {
-                script {
-                    withSonarQubeEnv('SonarQube') {
-                        sh 'mvn clean verify sonar:sonar'
-                    }
+                sh 'mvn clean compile'
+            }
+        }
+        
+        stage('SonarQube Analysis') {
+            steps {
+                withSonarQubeEnv('SonarQube') {
+                    sh ''' 
+                    $SONAR_HOME/bin/sonar-scanner \
+                    -Dsonar.projectKey=demo \
+                    -Dsonar.projectName=demo \
+                    -Dsonar.java.binaries=target/classes
+                    '''
                 }
             }
         }
-        stage('Build Docker Image') {
+        
+        stage('Code Build') {
             steps {
-                sh 'docker build -t demo-app:latest .'
+                sh 'mvn clean install'
             }
         }
-        stage('Push Docker Image') {
+        
+        stage('Docker Build Image') {
             steps {
-                withDockerRegistry([credentialsId: 'docker-hub-creds', url: 'https://index.docker.io/v1/']) {
-                    sh 'docker tag demo-app:latest <your-docker-hub-username>/demo-app:latest'
-                    sh 'docker push <your-docker-hub-username>/demo-app:latest'
+                sh 'docker build -t demo:latest .'
+            }
+        }
+        
+        stage('Docker Push Image') {
+            steps {
+                withDockerRegistry([credentialsId: 'docker', url: 'https://index.docker.io/v1/']) {
+                    sh 'docker tag demo:latest xeeshanakram/demo:latest'
+                    sh 'docker push xeeshanakram/demo:latest'
                 }
             }
         }
+        
         stage('Deploy to Kubernetes') {
             steps {
-                sh 'kubectl apply -f k8s/deployment.yaml'
+                script {
+                    // Apply the deployment YAML file to the Kubernetes cluster
+                    sh 'kubectl apply -f deployment.yaml'
+                }
             }
         }
     }
