@@ -8,22 +8,23 @@ pipeline {
 
     environment {
         SONAR_HOME = tool 'sonar-scanner'
-        KUBECONFIG = '/root/.kube/config'  // Ensure this points to your kubeconfig file
+        DOCKER_IMAGE = 'xeeshanakram/demo:latest'
+        KUBECONFIG = '/root/.kube/config' // If you're using a custom path for kubeconfig
     }
-
+    
     stages {
         stage('Git Checkout') {
             steps {
                 git branch: 'main', url: 'https://github.com/XEESHANAKRAM/Jenkins-Kubernetes-SonarQube-Docker-Maven-Jira.git'
             }
         }
-        
+
         stage('Code Compile') {
             steps {
                 sh 'mvn clean compile'
             }
         }
-        
+
         stage('SonarQube Analysis') {
             steps {
                 withSonarQubeEnv('SonarQube') {
@@ -36,19 +37,19 @@ pipeline {
                 }
             }
         }
-        
+
         stage('Code Build') {
             steps {
                 sh 'mvn clean install'
             }
         }
-        
+
         stage('Docker Build Image') {
             steps {
                 sh 'docker build -t demo:latest .'
             }
         }
-        
+
         stage('Docker Push Image') {
             steps {
                 withDockerRegistry([credentialsId: 'docker', url: 'https://index.docker.io/v1/']) {
@@ -57,12 +58,14 @@ pipeline {
                 }
             }
         }
-        
+
         stage('Deploy to Kubernetes') {
             steps {
                 script {
-                    // Apply the deployment YAML file to the Kubernetes cluster
-                    sh 'kubectl apply -f deployment.yaml'
+                    // Deploy to Kubernetes using kubectl
+                    sh '''
+                        kubectl apply -f k8s/deployment.yaml
+                    '''
                 }
             }
         }
